@@ -19,6 +19,7 @@ import {
     subYears
 } from 'date-fns';
 import { LinearGradient } from 'expo-linear-gradient';
+
 import * as Print from 'expo-print';
 import * as Sharing from 'expo-sharing';
 import { useSQLiteContext } from 'expo-sqlite';
@@ -167,26 +168,29 @@ export default function ExportScreen() {
     `;
     };
 
+    const getPDFUri = async () => {
+        const expenses = await fetchExpenses();
+
+        if (expenses.length === 0) {
+            Alert.alert('No Data', 'No expenses found for the selected period.');
+            return null;
+        }
+
+        const html = generateHtml(expenses, selectedPeriod);
+        const { uri } = await Print.printToFileAsync({ html });
+        return uri;
+    };
+
     const handleExport = async () => {
         setIsGenerating(true);
         try {
-            const expenses = await fetchExpenses();
-
-            if (expenses.length === 0) {
-                Alert.alert('No Data', 'No expenses found for the selected period.');
-                setIsGenerating(false);
-                return;
-            }
-
-            const html = generateHtml(expenses, selectedPeriod);
-
-            const { uri } = await Print.printToFileAsync({ html });
+            const uri = await getPDFUri();
+            if (!uri) return;
 
             await Sharing.shareAsync(uri, { UTI: '.pdf', mimeType: 'application/pdf' });
-
         } catch (error) {
-            console.error('Error generating PDF:', error);
-            Alert.alert('Error', 'Failed to generate or share PDF.');
+            console.error('Error exporting PDF:', error);
+            Alert.alert('Error', 'Failed to export PDF.');
         } finally {
             setIsGenerating(false);
         }
@@ -195,7 +199,7 @@ export default function ExportScreen() {
     return (
         <View style={styles.container}>
             <LinearGradient
-                colors={['#667db6', '#0082c8', '#0082c8', '#667db6']}
+                colors={['#4c669f', '#3b5998', '#192f6a']}
                 style={styles.header}
             >
                 <Text style={styles.headerTitle}>Export Data</Text>
@@ -204,7 +208,6 @@ export default function ExportScreen() {
 
             <View style={styles.content}>
                 <Text style={styles.sectionTitle}>Select Period</Text>
-
                 <View style={styles.periodContainer}>
                     {(['day', 'week', 'month', 'year', 'all'] as Period[]).map((period) => (
                         <TouchableOpacity
@@ -219,7 +222,7 @@ export default function ExportScreen() {
                                 styles.periodText,
                                 selectedPeriod === period && styles.periodTextActive
                             ]}>
-                                {period === 'all' ? 'All' : period.charAt(0).toUpperCase() + period.slice(1)}
+                                {period.charAt(0).toUpperCase() + period.slice(1)}
                             </Text>
                         </TouchableOpacity>
                     ))}
@@ -228,36 +231,25 @@ export default function ExportScreen() {
                 {selectedPeriod !== 'all' && (
                     <View style={styles.dateNavigation}>
                         <TouchableOpacity onPress={handlePrev} style={styles.navButton}>
-                            <Ionicons name="chevron-back" size={24} color="#0082c8" />
+                            <Ionicons name="chevron-back" size={24} color="#333" />
                         </TouchableOpacity>
                         <Text style={styles.dateLabel}>{getPeriodLabel()}</Text>
                         <TouchableOpacity onPress={handleNext} style={styles.navButton}>
-                            <Ionicons name="chevron-forward" size={24} color="#0082c8" />
+                            <Ionicons name="chevron-forward" size={24} color="#333" />
                         </TouchableOpacity>
                     </View>
                 )}
 
-                <View style={styles.infoCard}>
-                    <Ionicons name="document-text-outline" size={48} color="#0082c8" />
-                    <Text style={styles.infoText}>
-                        Export your expenses as a PDF document. You can share or save the file after generation.
-                    </Text>
+                <View style={styles.actionButtons}>
+                    <TouchableOpacity
+                        style={styles.exportButton}
+                        onPress={handleExport}
+                        disabled={isGenerating}
+                    >
+                        <Ionicons name="share-social-outline" size={24} color="#fff" style={{ marginRight: 8 }} />
+                        <Text style={styles.exportButtonText}>Export PDF</Text>
+                    </TouchableOpacity>
                 </View>
-
-                <TouchableOpacity
-                    style={styles.exportButton}
-                    onPress={handleExport}
-                    disabled={isGenerating}
-                >
-                    {isGenerating ? (
-                        <Text style={styles.exportButtonText}>Generating...</Text>
-                    ) : (
-                        <>
-                            <Ionicons name="share-outline" size={24} color="#fff" style={{ marginRight: 10 }} />
-                            <Text style={styles.exportButtonText}>Generate & Share PDF</Text>
-                        </>
-                    )}
-                </TouchableOpacity>
             </View>
         </View>
     );
@@ -331,27 +323,14 @@ const styles = StyleSheet.create({
         color: '#fff',
         fontWeight: 'bold',
     },
-    infoCard: {
-        backgroundColor: '#fff',
-        padding: 20,
-        borderRadius: 16,
-        alignItems: 'center',
-        marginBottom: 30,
-        borderWidth: 1,
-        borderColor: '#eee',
-    },
-    infoText: {
-        textAlign: 'center',
-        color: '#666',
-        marginTop: 10,
-        lineHeight: 20,
-    },
+
     exportButton: {
         backgroundColor: '#0082c8',
         flexDirection: 'row',
         alignItems: 'center',
         justifyContent: 'center',
         paddingVertical: 18,
+        paddingHorizontal: 16,
         borderRadius: 16,
         shadowColor: '#0082c8',
         shadowOffset: { width: 0, height: 4 },
@@ -382,5 +361,34 @@ const styles = StyleSheet.create({
         fontSize: 16,
         fontWeight: '600',
         color: '#333',
+    },
+    actionButtons: {
+        flexDirection: 'row',
+        gap: 12,
+        justifyContent: 'center',
+    },
+    actionButton: {
+        flex: 1,
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'center',
+        paddingVertical: 16,
+        borderRadius: 12,
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.2,
+        shadowRadius: 4,
+        elevation: 4,
+    },
+    downloadButton: {
+        backgroundColor: '#0082c8',
+    },
+    shareButton: {
+        backgroundColor: '#4c669f',
+    },
+    actionButtonText: {
+        color: '#fff',
+        fontSize: 16,
+        fontWeight: 'bold',
     },
 });
